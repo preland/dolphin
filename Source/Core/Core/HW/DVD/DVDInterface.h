@@ -231,6 +231,52 @@ private:
     explicit UDICVR(u32 hex) : Hex{hex} {}
   };
 
+  union UDICMDBUF
+  {
+    u32 Hex = 0;
+
+    struct
+    {
+      u8 CMDBYTE3;
+      u8 CMDBYTE2;
+      u8 CMDBYTE1;
+      u8 CMDBYTE0;
+    };
+  };
+  // DI DMA Address Register
+  union UDIMAR
+  {
+    u32 Hex = 0;
+
+    struct {
+      unsigned Zerobits : 5;
+      unsigned : 27;
+    };
+    struct {
+      unsigned Address : 26;
+      unsigned : 6;
+    };
+  };
+
+  //DI DMA Address Length Register
+  union UDILENGTH{
+    u32 Hex = 0;
+
+    //todo: can i just put the bitfields in the struct? idk
+    //BitField<0, 5, u32> ZEROBITS;
+    //BitField<1, 27, u32> reserved;
+    struct
+    {
+      unsigned Zerobits : 5;
+      unsigned : 27;
+    };
+    struct
+    {
+      unsigned Length : 26;
+      unsigned : 6;
+    };
+
+  };
   // DI DMA Control Register
   union UDICR
   {
@@ -265,7 +311,11 @@ private:
   u32 m_DIIMMBUF = 0;
   UDICFG m_DICFG;
 
+  //preland note: this was 3 u32 vars for audio; check for compatibility
   StreamADPCM::ADPCMDecoder m_adpcm_decoder;
+
+  //GC-AM only
+  unsigned char media_buffer[0x40];
 
   // DTK
   bool m_stream = false;

@@ -23,6 +23,7 @@
 #include "Core/AchievementManager.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/SessionSettings.h"
+#include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/CoreTiming.h"
 #include "Core/DolphinAnalytics.h"
@@ -93,7 +94,7 @@ void DVDInterface::DoState(PointerWrap& p)
 {
   p.Do(m_DISR);
   p.Do(m_DICVR);
-  p.DoArray(m_DICMDBUF);
+  p.DoArray(m_DICMDBUF); //preland note: gives 3 as 2nd arg
   p.Do(m_DIMAR);
   p.Do(m_DILENGTH);
   p.Do(m_DICR);
@@ -757,18 +758,37 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   if (static_cast<DICommand>(m_DICMDBUF[0] >> 24) != DICommand::RequestError)
     SetDriveError(DriveError::None);
 
+  int GCAM = ((SConfig::GetInstance().m_SIDevice[0] == SI_AM_BASEBOARD)
+          && (SConfig::GetInstance().m_EXIDevice[2] == EXIDEVICE_AM_BASEBOARD))
+          ? 1 : 0;
+  if (GCAM)
+  {
+    ERROR_LOG_FMT(DVDINTERFACE, "DVD (Buffer {:08x}, {:08x}, {:08x}, DMA=addr:{:08x}, len:{:08x}, ctrl:{:08x})",
+                m_DICMDBUF[0], m_DICMDBUF[1], m_DICMDBUF[2], m_DIMAR, m_DILENGTH, m_DICR);
+    //original comment: decrypt command. But we have a zero key, that simplifies things a lot.
+    //If you get crazy dvd command errors, make sure 0x80000000 - 0x8000000c is zero'd
+    m_DICMDBUF[0] <<= 24; //preland note: this used to be performed on .Hex of the element
+  }
+
   switch (static_cast<DICommand>(m_DICMDBUF[0] >> 24))
   {
   // Used by both GC and Wii
   case DICommand::Inquiry:
   {
-    // (shuffle2) Taken from my Wii
-    auto& memory = m_system.GetMemory();
-    memory.Write_U32(0x00000002, m_DIMAR);      // Revision level, device code
-    memory.Write_U32(0x20060526, m_DIMAR + 4);  // Release date
-    memory.Write_U32(0x41000000, m_DIMAR + 8);  // Version
+    if (GCAM) {
+      // original comment: 0x29484100...
+      // was 21 i'm not entirely sure about this, but it works well.
+      m_DIIMMBUF = 0x21000000;
+    }
+    else {
+      // (shuffle2) Taken from my Wii
+      auto& memory = m_system.GetMemory();
+      memory.Write_U32(0x00000002, m_DIMAR);      // Revision level, device code
+      memory.Write_U32(0x20060526, m_DIMAR + 4);  // Release date
+      memory.Write_U32(0x41000000, m_DIMAR + 8);  // Version
 
-    INFO_LOG_FMT(DVDINTERFACE, "DVDLowInquiry (Buffer {:#010x}, {:#x})", m_DIMAR, m_DILENGTH);
+      INFO_LOG_FMT(DVDINTERFACE, "DVDLowInquiry (Buffer {:#010x}, {:#x})", m_DIMAR, m_DILENGTH);
+    }
     break;
   }
   // GC-only patched drive firmware command, used by libogc
@@ -800,7 +820,57 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
           DVDINTERFACE,
           "Read: DVDOffset={:08x}, DMABuffer = {:08x}, SrcLength = {:08x}, DMALength = {:08x}",
           dvd_offset, m_DIMAR, m_DICMDBUF[2], m_DILENGTH);
-
+      if (GCAM)
+					{
+          if (dvd_offset & 0x80000000) // read request to hardware buffer
+						{
+							switch (dvd_offset)
+							{
+							case 0x80000000:
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: READ MEDIA BOARD STATUS (80000000)");
+								for (unsigned int i = 0; i < m_DILENGTH / 4; i++){
+                  m_system.GetMemory().Write_U32(0, m_DIMAR + i * 4);
+                }
+								break;
+							case 0x80000040:
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: READ MEDIA BOARD STATUS (2) (80000040)");
+								for (unsigned int i = 0; i < m_DILENGTH / 4; i++)
+									m_system.GetMemory().Write_U32(~0, m_DIMAR + i * 4);
+								m_system.GetMemory().Write_U32(0x00000020, m_DIMAR ); // DIMM SIZE, LE
+								m_system.GetMemory().Write_U32(0x4743414D, m_DIMAR + 4); // GCAM signature
+								break;
+							case 0x80000120:
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: READ FIRMWARE STATUS (80000120)");
+								for (unsigned int i = 0; i < m_DILENGTH / 4; i++)
+									m_system.GetMemory().Write_U32(0x01010101, m_DIMAR + i * 4);
+								break;
+							case 0x80000140:
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: READ FIRMWARE STATUS (80000140)");
+								for (unsigned int i = 0; i < m_DILENGTH / 4; i++)
+									m_system.GetMemory().Write_U32(0x01010101, m_DIMAR + i * 4);
+								break;
+							case 0x84000020:
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: READ MEDIA BOARD STATUS (1) (84000020)");
+								for (unsigned int i = 0; i < m_DILENGTH / 4; i++)
+									m_system.GetMemory().Write_U32(0x00000000, m_DIMAR + i * 4);
+								break;
+							default:
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: UNKNOWN MEDIA BOARD LOCATION %x", dvd_offset);
+								break;
+							}
+							break;
+						}
+          else if ((dvd_offset == 0x1f900000) || (dvd_offset == 0x1f900020))
+						{
+							ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: READ MEDIA BOARD COMM AREA (1f900020)");
+              //preland note: pointer range size is an educated guess, should be right
+							memcpy(m_system.GetMemory().GetPointerForRange(m_DIMAR, m_DILENGTH), media_buffer + dvd_offset - 0x1f900000, m_DILENGTH );
+							unsigned int i;
+							for (i = 0; i < m_DILENGTH; i += 4)
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: %08x", m_system.GetMemory().Read_U32(m_DIMAR + i));
+							break;
+						}
+					}
       if (m_drive_state == DriveState::ReadyNoReadsMade)
         SetDriveState(DriveState::Ready);
 
@@ -836,9 +906,85 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
 
   // Used by both GC and Wii
   case DICommand::Seek:
-    // Currently unimplemented
+    if (!GCAM)
+    {
+      // We dont' care :)
     INFO_LOG_FMT(DVDINTERFACE, "Seek: offset={:09x} (ignoring)",
                  static_cast<u64>(m_DICMDBUF[1]) << 2);
+    }
+    else
+    {
+			memset(media_buffer, 0, 0x20);
+			media_buffer[0] = media_buffer[0x20]; // ID
+			media_buffer[2] = media_buffer[0x22];
+			media_buffer[3] = media_buffer[0x23] | 0x80;
+			int cmd = (media_buffer[0x23]<<8)|media_buffer[0x22];
+			ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: execute buffer, cmd=%04x", cmd);
+			switch (cmd)
+			{
+			case 0x00:
+				media_buffer[4] = 1;
+				break;
+			case 0x1:
+				media_buffer[7] = 0x20; // DIMM Size
+				break;
+			case 0x100:
+				{
+					static int percentage;
+					static int status = 0;
+					percentage++;
+					if (percentage > 100)
+					{
+						status++;
+						percentage = 0;
+					}
+					media_buffer[4] = status;
+					/* status:
+					0 - "Initializing media board. Please wait.."
+					1 - "Checking network. Please wait..."
+					2 - "Found a system disc. Insert a game disc"
+					3 - "Testing a game program. %d%%"
+					4 - "Loading a game program. %d%%"
+					5  - go
+					6  - error xx
+					*/
+					media_buffer[8] = percentage;
+					media_buffer[4] = 0x05;
+					media_buffer[8] = 0x64;
+					break;
+				}
+			case 0x101:
+				media_buffer[4] = 3; // version
+				media_buffer[5] = 3;
+				media_buffer[6] = 1; // xxx
+				media_buffer[8] = 1;
+				media_buffer[16] = 0xFF;
+				media_buffer[17] = 0xFF;
+				media_buffer[18] = 0xFF;
+				media_buffer[19] = 0xFF;
+				break;
+			case 0x102:  // get error code
+				media_buffer[4] = 1; // 0: download incomplete (31), 1: corrupted, other error 1
+				media_buffer[5] = 0;
+				break;
+			case 0x103:
+				memcpy(media_buffer + 4, "A89E27A50364511", 15);  // serial
+				break;
+#if 0
+			case 0x301: // unknown
+				memcpy(media_buffer + 4, media_buffer + 0x24, 0x1c);
+				break;
+			case 0x302:
+				break;
+#endif
+			default:
+				ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: execute buffer (unknown)");
+				break;
+			}
+			memset(media_buffer + 0x20, 0, 0x20);
+			m_DIIMMBUF = 0x66556677; // just a random value that works.
+                               // preland note: ^^^???
+    }
     break;
 
   // Wii-exclusive
