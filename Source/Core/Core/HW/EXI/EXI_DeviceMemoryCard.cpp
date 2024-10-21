@@ -462,6 +462,7 @@ void CEXIMemoryCard::TransferByte(u8& byte)
       break;
 
     case Command::ChipErase:
+      //preland note: this was originally given an INFO_LOG_FMT
       byte = 0xFF;
       break;
 

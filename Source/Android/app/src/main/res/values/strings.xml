@@ -684,6 +684,9 @@ It can efficiently compress both junk data and encrypted Wii data.
     <string name="device_dummy">Dummy</string>
     <string name="device_memory_card">Memory Card</string>
     <string name="device_gci_folder">GCI Folder</string>
+    <string name="device_mic">Mic</string>
+    <string name="device_bba">BBA</string>
+    <string name="device_am_baseboard">AM-Baseboard (Triforce)</string>
 
     <!-- Slot SP1 Device selection -->
     <string name="broadband_adapter_xlink">Broadband Adapter (XLink Kai)</string>
@@ -795,6 +798,8 @@ It can efficiently compress both junk data and encrypted Wii data.
     <string name="gcpad_dance_mat">Dance Mat</string>
     <string name="gcpad_taru_konga">DK Bongos</string>
     <string name="gcpad_gc_adapter">GameCube Adapter</string>
+    <string name="gcpad_gba">GBA</string>
+    <string name="gcpad_am_baseboard">AM-Baseboard (Triforce)</string>
 
     <!-- Wiimote Types -->
     <string name="wiimote_disabled">None</string>

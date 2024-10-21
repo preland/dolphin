@@ -8,6 +8,7 @@
 #include "Common/CommonTypes.h"
 #include "Core/HW/EXI/EXI_DeviceAD16.h"
 #include "Core/HW/EXI/EXI_DeviceAGP.h"
+#include "Core/HW/EXI/EXI_DeviceAMBaseboard.h"
 #include "Core/HW/EXI/EXI_DeviceDummy.h"
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 #include "Core/HW/EXI/EXI_DeviceGecko.h"
@@ -163,6 +164,9 @@ std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, const EXIDevi
     break;
 
   case EXIDeviceType::AMBaseboard:
+    result = std::make_unique<CEXIAMBaseboard>(system); //preland todo: do i need to pass anything
+                                                        //else?
+    break;
   case EXIDeviceType::None:
   default:
     result = std::make_unique<IEXIDevice>(system);
