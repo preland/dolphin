@@ -30,10 +30,13 @@
 #include "Core/HW/AudioInterface.h"
 #include "Core/HW/DVD/DVDMath.h"
 #include "Core/HW/DVD/DVDThread.h"
+#include "Core/HW/EXI/EXI.h"
+#include "Core/HW/EXI/EXI_Device.h"
 #include "Core/HW/EXI/EXI_DeviceIPL.h"
 #include "Core/HW/MMIO.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/ProcessorInterface.h"
+#include "Core/HW/SI/SI_Device.h"
 #include "Core/HW/StreamADPCM.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/IOS/DI/DI.h"
@@ -758,13 +761,14 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   if (static_cast<DICommand>(m_DICMDBUF[0] >> 24) != DICommand::RequestError)
     SetDriveError(DriveError::None);
 
-  int GCAM = ((SConfig::GetInstance().m_SIDevice[0] == SI_AM_BASEBOARD)
-          && (SConfig::GetInstance().m_EXIDevice[2] == EXIDEVICE_AM_BASEBOARD))
+  int GCAM = ((Config::Get(Config::GetInfoForEXIDevice(ExpansionInterface::Slot::SP1)) == ExpansionInterface::EXIDeviceType::AMBaseboard)
+          && (Config::Get(Config::GetInfoForSIDevice(0)) == SerialInterface::SIDevices::SIDEVICE_AM_BASEBOARD))
           ? 1 : 0;
   if (GCAM)
   {
-    ERROR_LOG_FMT(DVDINTERFACE, "DVD (Buffer {:08x}, {:08x}, {:08x}, DMA=addr:{:08x}, len:{:08x}, ctrl:{:08x})",
-                m_DICMDBUF[0], m_DICMDBUF[1], m_DICMDBUF[2], m_DIMAR, m_DILENGTH, m_DICR);
+    ERROR_LOG_FMT(DVDINTERFACE, "DVD: {}, {}, {}, DMA=addr:{},len:{},ctrl:{}",
+                m_DICMDBUF[0], m_DICMDBUF[1], m_DICMDBUF[2], m_DIMAR, m_DILENGTH, m_DICR.Hex);
+    //preland note: dicr log is probably wrong
     //original comment: decrypt command. But we have a zero key, that simplifies things a lot.
     //If you get crazy dvd command errors, make sure 0x80000000 - 0x8000000c is zero'd
     m_DICMDBUF[0] <<= 24; //preland note: this used to be performed on .Hex of the element
@@ -779,6 +783,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
       // original comment: 0x29484100...
       // was 21 i'm not entirely sure about this, but it works well.
       m_DIIMMBUF = 0x21000000;
+      INFO_LOG_FMT(DVDINTERFACE, "DVDLowInquiry (set DIIMMBUF to 0x21000000)");
     }
     else {
       // (shuffle2) Taken from my Wii
@@ -855,7 +860,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
 									m_system.GetMemory().Write_U32(0x00000000, m_DIMAR + i * 4);
 								break;
 							default:
-								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: UNKNOWN MEDIA BOARD LOCATION %x", dvd_offset);
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: UNKNOWN MEDIA BOARD LOCATION {}", dvd_offset);
 								break;
 							}
 							break;
@@ -867,7 +872,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
 							memcpy(m_system.GetMemory().GetPointerForRange(m_DIMAR, m_DILENGTH), media_buffer + dvd_offset - 0x1f900000, m_DILENGTH );
 							unsigned int i;
 							for (i = 0; i < m_DILENGTH; i += 4)
-								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: %08x", m_system.GetMemory().Read_U32(m_DIMAR + i));
+								ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: {}", m_system.GetMemory().Read_U32(m_DIMAR + i));
 							break;
 						}
 					}
@@ -919,7 +924,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
 			media_buffer[2] = media_buffer[0x22];
 			media_buffer[3] = media_buffer[0x23] | 0x80;
 			int cmd = (media_buffer[0x23]<<8)|media_buffer[0x22];
-			ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: execute buffer, cmd=%04x", cmd);
+			ERROR_LOG_FMT(DVDINTERFACE, "GC-AM: execute buffer, cmd={}", cmd);
 			switch (cmd)
 			{
 			case 0x00:

@@ -7,15 +7,15 @@
 #include "Core/HW/EXI/EXI_Device.h"
 #include "Core/HW/EXI/EXI_DeviceAMBaseboard.h"
 
-CEXIAMBaseBoard::CEXIAMBaseBoard() : m_position(0), m_have_irq(false) {}
+CEXIAMBaseboard::CEXIAMBaseboard(Core::System& system) : ExpansionInterface::IEXIDevice(system){}//, m_position(0), m_have_irq(false) {}//m_position(0), m_have_irq(false) {}
 
 void CEXIAMBaseboard::SetCS(int cs)
 {
-  ERROR_LOG_FMT(SP1, "AM-BB ChipSelect=%d", cs);
+  ERROR_LOG_FMT(SP1, "AM-BB ChipSelect={}", cs);
   if (cs)
     m_position = 0;
 }
-bool CEXIAMBaseboard::IsPresent() {
+bool IsPresent() {
   return true;
 }
 void CEXIAMBaseboard::TransferByte(u8& _byte)
@@ -41,7 +41,7 @@ void CEXIAMBaseboard::TransferByte(u8& _byte)
 		xx xx xx xx 04 rr rr
 		3 byte command, 1 byte checksum
 	*/
-  ERROR_LOG_FMT(SP1, "AM-BB > %02x", _byte);
+  ERROR_LOG_FMT(SP1, "AM-BB > {}", _byte);
 
   if(m_position < 4)
   {
@@ -56,14 +56,14 @@ void CEXIAMBaseboard::TransferByte(u8& _byte)
       bit >>= 1;
     }
     if (m_command[3] != (checksum & 0xFF))
-      ERROR_LOG_FMT(SP1, "AM-BB cs: %02x, w: %02x", m_command[3], checksum & 0xFF);
+      ERROR_LOG_FMT(SP1, "AM-BB cs: {}, w: {}", m_command[3], checksum & 0xFF);
   }
   else
   {
     if (m_position == 4)
     {
       _byte = 4;
-      ERROR_LOG_FMT(SP1, "AM-BB COMMAND: %02x %02x %02x", m_command[0], m_command[1], m_command[2]);
+      ERROR_LOG_FMT(SP1, "AM-BB COMMAND: {%02x} {%02x} {%02x}", m_command[0], m_command[1], m_command[2]);
       if ((m_command[0] == 0xFF) && (m_command[1] == 0) && (m_command[2] == 0))
         m_have_irq = true;
       else if (m_command[0] == 0x82)

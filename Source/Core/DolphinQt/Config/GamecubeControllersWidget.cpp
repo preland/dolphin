@@ -43,6 +43,7 @@ static constexpr std::array s_gc_types = {
 #endif
     SIDeviceName{SerialInterface::SIDEVICE_GC_GBA, _trans("GBA (TCP)")},
     SIDeviceName{SerialInterface::SIDEVICE_GC_KEYBOARD, _trans("Keyboard Controller")},
+    SIDeviceName{SerialInterface::SIDEVICE_AM_BASEBOARD, _trans("AM-Baseboard (Triforce)")},
 };
 
 static std::optional<int> ToGCMenuIndex(const SerialInterface::SIDevices sidevice)

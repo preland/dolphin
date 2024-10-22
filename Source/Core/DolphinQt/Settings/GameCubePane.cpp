@@ -30,6 +30,7 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/HW/EXI/EXI.h"
+#include "Core/HW/EXI/EXI_Device.h"
 #include "Core/HW/GCMemcard/GCMemcard.h"
 #include "Core/NetPlayServer.h"
 #include "Core/System.h"
@@ -134,7 +135,7 @@ void GameCubePane::CreateWidgets()
 
   // Add slot devices
   for (const auto device : {EXIDeviceType::None, EXIDeviceType::Dummy, EXIDeviceType::MemoryCard,
-                            EXIDeviceType::MemoryCardFolder, EXIDeviceType::Gecko,
+                            EXIDeviceType::MemoryCardFolder, EXIDeviceType::AMBaseboard, EXIDeviceType::Gecko,
                             EXIDeviceType::AGP, EXIDeviceType::Microphone})
   {
     const QString name = tr(fmt::format("{:n}", device).c_str());
@@ -152,6 +153,7 @@ void GameCubePane::CreateWidgets()
            EXIDeviceType::EthernetTapServer,
            EXIDeviceType::EthernetBuiltIn,
            EXIDeviceType::ModemTapServer,
+           EXIDeviceType::AMBaseboard,
        })
   {
     m_slot_combos[ExpansionInterface::Slot::SP1]->addItem(tr(fmt::format("{:n}", device).c_str()),

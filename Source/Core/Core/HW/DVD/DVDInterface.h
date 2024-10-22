@@ -287,6 +287,9 @@ private:
                                  // 0: Immediate Mode (can only do Access Register Command)
     BitField<2, 1, u32> RW;  // 0: Read Command (DVD to Memory)  1: Write Command (Memory to DVD)
     BitField<3, 29, u32> reserved;
+
+    UDICR() = default;
+    explicit UDICR(u32 hex) : Hex{hex} {}
   };
 
   // DI Config Register

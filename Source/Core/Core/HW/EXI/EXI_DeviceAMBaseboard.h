@@ -2,13 +2,14 @@
 //
 
 #include "Core/HW/EXI/EXI_Device.h"
+#include "Core/System.h"
 class CEXIAMBaseboard : public ExpansionInterface::IEXIDevice
 {
   public:
-    CEXIAMBaseboard();
+    CEXIAMBaseboard(Core::System& system);
 
     virtual void SetCS(int _iCS);
-    virtual bool IsPresent();
+    //virtual bool IsPresent(); //preland note: use parent?
     virtual bool IsInterruptSet();
 
   private:

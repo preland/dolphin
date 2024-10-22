@@ -164,8 +164,7 @@ std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, const EXIDevi
     break;
 
   case EXIDeviceType::AMBaseboard:
-    result = std::make_unique<CEXIAMBaseboard>(system); //preland todo: do i need to pass anything
-                                                        //else?
+    result = std::make_unique<CEXIAMBaseboard>(system);
     break;
   case EXIDeviceType::None:
   default:
