@@ -73,8 +73,28 @@ class JVSIOMessage
 
 }; //end class JVSIOMessage
 
-CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SerialInterface::SIDevices device_type, int device_number) : SerialInterface::ISIDevice(system, device_type, device_number) {}
+CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SerialInterface::SIDevices device_type, int device_number) : SerialInterface::ISIDevice(system, device_type, device_number) {
+  memset(coin, 0, sizeof(coin));
+}
+/*	MKGP controls mapping:
+	stickX	- steering
+	triggerRight - gas
+	triggerLeft - brake
+	A		- Item button
+	B		- Cancel button
+	Z		- Coin
+	Y		- Test mode (not working)
+	X		- Service
 
+	VS2002 controls mapping:
+	D-pad	- movement
+	B		- Short pass
+	A		- Long pass
+	X		- Shoot
+	Z		- Coin
+	Y		- Test mode
+	triggerRight - Service
+*/
 int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
 {
   //for debug logging only
@@ -88,7 +108,6 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
     EBufferCommands command = static_cast<EBufferCommands>(_pBuffer[iPosition ^ 3]);
 
     //handle it
-
     switch(command)
     {
       case CMD_RESET: //returns ID and dip switches
@@ -126,7 +145,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
             case 0x10:
               {
                 DEBUG_LOG_FMT(AMBASEBOARDDEBUG, "GC-AM: CMD 10, {%02x} (READ STATUS&SWITCHES)", ptr(1));
-               GCPadStatus PadStatus;
+                GCPadStatus PadStatus;
                 memset(&PadStatus, 0 ,sizeof(PadStatus));
                 PadStatus = Pad::GetStatus(SerialInterface::ISIDevice::m_device_number);
                 //CPluginManager::GetInstance().GetPad(ISIDevice::m_iDeviceNumber)
@@ -135,20 +154,16 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
                 res[resp++] = 0x2;
                 int d10_0 = 0xdf;
 
-                if (PadStatus.triggerLeft)
+                //original comment: baseboard test/service switches ???, disabled for a while
+                if (PadStatus.button & PAD_BUTTON_Y) //Test
                   d10_0 &= ~0x80;
-                if (PadStatus.triggerRight)
+                if (PadStatus.button & PAD_BUTTON_X) //Service
                   d10_0 &= ~0x40;
 
                 res[resp++] = d10_0;
                 res[resp++] = d10_1;
                 break;
               }
-            case 0x12:
-              ERROR_LOG_FMT(AMBASEBOARDDEBUG, "GC-AM: CMD 12, {%02x} {%02x}", ptr(1), ptr(2));
-              res[resp++] = 0x12;
-              res[resp++] = 0x00;
-              break;
             case 0x11:
               {
                 ERROR_LOG_FMT(AMBASEBOARDDEBUG, "GC-AM: CMD 11, {%02x} (READ SERIAL NR)", ptr(1));
@@ -159,6 +174,12 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
                 resp += 0x10;
                 break;
               }
+            case 0x12:
+              ERROR_LOG_FMT(AMBASEBOARDDEBUG, "GC-AM: CMD 12, {%02x} {%02x}", ptr(1), ptr(2));
+              res[resp++] = 0x12;
+              res[resp++] = 0x00;
+              break;
+
             case 0x15:
               ERROR_LOG_FMT(AMBASEBOARDDEBUG, "GC-AM: CMD 15, {%02x} (READ FIRM VERSION)", ptr(1));
               res[resp++] = 0x15;
@@ -208,8 +229,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
               res[resp++] = 0x00;
               res[resp++] = 0x00;
               break;
-            case 0x40:
-            case 0x41:
+            case 0x40: //preland note: maybe cases 40-4f should be treated like above?
+            case 0x41: //maybe as default case?
             case 0x42:
             case 0x43:
             case 0x44:
@@ -227,7 +248,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
               {
                 DEBUG_LOG_FMT(AMBASEBOARDDEBUG, "GC-AM: CMD {%02x}, {%02x} {%02x} {%02x} {%02x} {%02x} {%02x} {%02x} (JVS IO)",
                   ptr(0), ptr(1), ptr(2), ptr(3), ptr(4), ptr(5), ptr(6), ptr(7));
-                int total_length = ptr(1);
+                //int total_length = ptr(1);
                 int pptr = 2;
                 JVSIOMessage msg;
 
@@ -239,7 +260,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
                 int jvs_io_length = 0;
                 for (i=0; i<nr_bytes + 3; ++i)
                   jvs_io_buffer[jvs_io_length++] = ptr(pptr + i);
-                int ptr = 0;
+                // int ptr = 0;
                 int node = jvs_io_buffer[1];
 
                 unsigned char *jvs_io = jvs_io_buffer + 3;
@@ -255,12 +276,19 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
                   {
                   case 0x10: // get ID
                     msg.addData(1);
-                    {
+                    /*{
                       char buffer[12];
                       sprintf(buffer, "JVS-node %02x", node);
                       //msg.addData(buffer);
                       msg.addData((char*)"JAMMA I/O CONTROLLER");
-                    }
+                    }*/
+
+                    //preland note: removing below until I can figure out how to implement properly.
+                    //As such, the proper game id is presumed to be RELSAB atm
+                    //if (!memcmp(SConfig::GetInstance().m_LocalCoreStartupParameter.GetUniqueID().c_str(), "RELSAB", 6))
+                    //  msg.addData("namco ltd.;FCA-1;Ver1.01;JPN,Multipurpose + Rotary Encoder");
+                    //else
+                      msg.addData((char*)"SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551;Ver1.00");
                     msg.addData(0);
                     break;
                   case 0x11: // cmd revision
@@ -269,86 +297,159 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
                     break;
                   case 0x12: // jvs revision
                     msg.addData(1);
-                    msg.addData(0x12);
+                    msg.addData(0x20);
                     break;
                   case 0x13: // com revision
                     msg.addData(1);
-                    msg.addData(0x13);
+                    msg.addData(0x10);
                     break;
                   case 0x14: // get features
                     msg.addData(1);
-                    //preland note: addData uses void* but may only ever ask for unsigned char
-                    msg.addData((void*)"\x01\x02\x0a\x00", 4);  // 2 player, 10 bit
-                    msg.addData((void*)"\x02\x02\x00\x00", 4);  // 2 coin slots
-                    //msg.addData("\x03\x02\x08\x00", 4);
-                    msg.addData((void*)"\x00\x00\x00\x00", 4);
-                    break;
-                  case 0x15:
-                    while (*jvs_io++);
+                    //preland note: see above note
+                    /*if (!memcmp(SConfig::GetInstance().m_LocalCoreStartupParameter.GetUniqueID().c_str(), "RELSAB", 6)) {
+										msg.addData((void *)"\x01\x01\x13\x00", 4);  // 1 player, 19 bit
+										msg.addData((void *)"\x02\x02\x00\x00", 4);  // 2 coin slots
+										msg.addData((void *)"\x03\x08\x00\x00", 4);  // 8 analogs
+										msg.addData((void *)"\x12\x0c\x00\x00", 4);  // 12bit out
+										msg.addData((void *)"\x00\x00\x00\x00", 4);
+									} else {*/
+										msg.addData((void *)"\x01\x02\x0d\x00", 4);  // 2 players, 13 bit
+										msg.addData((void *)"\x02\x02\x00\x00", 4);  // 2 coin slots
+										msg.addData((void *)"\x03\x08\x00\x00", 4);  // 8 analogs
+										msg.addData((void *)"\x12\x06\x00\x00", 4);  // 6bit out
+										msg.addData((void *)"\x00\x00\x00\x00", 4);
+									//}
+                  break;
+                  case 0x15: // baseboard id
+                    while (*jvs_io++) {};
                     msg.addData(1);
                     break;
-                  case 0x20:
+                  case 0x20: // buttons
                     {
                       int nr_players = *jvs_io++;
                       int bytes_per_player = *jvs_io++; /* ??? */
-                      int i, j;
+                      int j;
                       msg.addData(1);
 
-                      msg.addData(0); // tilt
+                      //msg.addData(0); // tilt
+                      GCPadStatus PadStatus = Pad::GetStatus(0);
+                      if (PadStatus.button & PAD_BUTTON_Y) // Test button
+                        msg.addData(0x80);
+                      else
+                       msg.addData(0x00);
                       for (i=0; i<nr_players; ++i)
                       {
-                        GCPadStatus PadStatus = Pad::GetStatus(i);
+                        PadStatus = Pad::GetStatus(i);
                         //CPluginManager::GetInstance().GetPad(i)
                         //  ->PAD_GetStatus(i, &PadStatus);
-                        unsigned char player_data[2] = {0,0};
-                        if (PadStatus.button & PAD_BUTTON_START)
-                          player_data[0] |= 0x80;
-                        if (PadStatus.button & PAD_BUTTON_UP)
-                          player_data[0] |= 0x20;
-                        if (PadStatus.button & PAD_BUTTON_DOWN)
-                          player_data[0] |= 0x10;
-                        if (PadStatus.button & PAD_BUTTON_LEFT)
-                          player_data[0] |= 0x08;
-                        if (PadStatus.button & PAD_BUTTON_RIGHT)
-                          player_data[0] |= 0x04;
+                        unsigned char player_data[3] = {0,0,0};
+                        //preland note: see above(r) note
+                       /*if (!memcmp(SConfig::GetInstance().m_LocalCoreStartupParameter.GetUniqueID().c_str(), "RELSAB", 6)) {
+												if (PadStatus.button & PAD_BUTTON_START)	// Not used in MKGP
+													player_data[0] |= 0x80;
+												if (PadStatus.button & PAD_BUTTON_X)	// Service button
+													player_data[0] |= 0x40;
+												// Not used in MKGP
+												if (PadStatus.button & PAD_BUTTON_UP)
+													player_data[0] |= 0x20;
+												if (PadStatus.button & PAD_BUTTON_DOWN)
+													player_data[0] |= 0x10;
+												if (PadStatus.button & PAD_BUTTON_LEFT)
+													player_data[0] |= 0x08;
+												if (PadStatus.button & PAD_BUTTON_RIGHT)
+													player_data[0] |= 0x04;
 
-                        if (PadStatus.button & PAD_BUTTON_A)
-                          player_data[0] |= 0x02;
-                        if (PadStatus.button & PAD_BUTTON_B)
-                          player_data[0] |= 0x01;
+												if (PadStatus.button & PAD_BUTTON_A)	// Item button
+													player_data[1] |= 0x20;
+												if (PadStatus.button & PAD_BUTTON_B)	// Cancel button
+													player_data[1] |= 0x10;
+											} else */ {
+												if (PadStatus.button & PAD_BUTTON_START)
+													player_data[0] |= 0x80;
+												if (PadStatus.button & PAD_TRIGGER_R)	// Service button
+													player_data[0] |= 0x40;
+												if (PadStatus.button & PAD_BUTTON_UP)
+													player_data[0] |= 0x20;
+												if (PadStatus.button & PAD_BUTTON_DOWN)
+													player_data[0] |= 0x10;
+												if (PadStatus.button & PAD_BUTTON_LEFT)
+													player_data[0] |= 0x08;
+												if (PadStatus.button & PAD_BUTTON_RIGHT)
+													player_data[0] |= 0x04;
+												if (PadStatus.button & PAD_BUTTON_A)
+													player_data[0] |= 0x02;
+												if (PadStatus.button & PAD_BUTTON_X)
+													player_data[0] |= 0x01;
 
-                        if (PadStatus.button & PAD_BUTTON_X)
-                          player_data[1] |= 0x80;
-                        if (PadStatus.button & PAD_BUTTON_Y)
-                          player_data[1] |= 0x40;
-                        if (PadStatus.button & PAD_TRIGGER_L)
-                          player_data[1] |= 0x20;
-                        if (PadStatus.button & PAD_TRIGGER_R)
-                          player_data[1] |= 0x10;
-
+												if (PadStatus.button & PAD_BUTTON_B)
+													player_data[1] |= 0x80;
+											}
                         for (j=0; j<bytes_per_player; ++j)
-                          msg.addData(player_data[j&1]);
+                          msg.addData(player_data[j]);
                       }
                       break;
                     }
-                  case 0x21: // coin
+                  case 0x21: // coins
                     {
                       int slots = *jvs_io++;
                       msg.addData(1);
-                      GCPadStatus PadStatus = Pad::GetStatus(0);
-                      //CPluginManager::GetInstance().GetPad(0)
-                      //  ->PAD_GetStatus(0, &PadStatus);
-                      while (slots--)
-                      {
-                        msg.addData(0);
-                        msg.addData((PadStatus.button & PAD_BUTTON_START) ? 1 : 0);
+                      for (i=0; i < slots; i++) {
+                        GCPadStatus PadStatus = Pad::GetStatus(i);
+                        if((PadStatus.button & PAD_TRIGGER_Z) && !coin_pressed[i])
+                          coin[i]++;
+                        coin_pressed[i] = PadStatus.button & PAD_TRIGGER_Z;
+                        msg.addData((coin[i]>>8)&0x3f);
+                        msg.addData(coin[i]&0xff);
                       }
+                      DEBUG_LOG_FMT(CONTROLLERINTERFACE, "JVS-IO:Get Coins Slots:{} Unknown:{}", slots, unknown);
                       break;
                     }
-                  case 0x22: // analog
+                  case 0x22: // analogs
                     {
-                      break;
-                    }
+                      msg.addData(1);	// status
+                      int analogs = *jvs_io++;
+                      GCPadStatus PadStatus = Pad::GetStatus(0);
+
+                      // 8 bit to 16 bit conversion
+                      msg.addData(PadStatus.stickX);	// steering
+                      msg.addData(PadStatus.stickX);
+
+                      // 8 bit to 16 bit conversion
+                      msg.addData(PadStatus.triggerRight);	// gas
+                      msg.addData(PadStatus.triggerRight);
+
+                      // 8 bit to 16 bit conversion
+                      msg.addData(PadStatus.triggerLeft);	// brake
+                      msg.addData(PadStatus.triggerLeft);
+
+                      for( i=0; i < (analogs - 3); i++ ) {
+                        msg.addData(0);
+                        msg.addData(0);
+                      }
+                    } break;
+                  case 0x30: // sub coins
+                    {
+                      int slot = *jvs_io++;
+                      coin[slot] -= (*jvs_io++<<8)|*jvs_io++;
+                      msg.addData(1);
+                    } break;
+                  case 0x32: // General out
+                    {
+                      int bytes = *jvs_io++;
+                      while (bytes--) {*jvs_io++;}
+                      msg.addData(1);
+                    } break;
+                  case 0x70: // custom namco's command subset
+                    {
+                      int cmd = *jvs_io++;
+                      if (cmd == 0x18) {// id check
+                        jvs_io += 4;
+                        msg.addData(1);
+                        msg.addData(0xff);
+                      } else {
+                        msg.addData(1);
+                      }
+                    } break;
                   case 0xf0:
                     if (*jvs_io++ == 0xD9)
                     {
@@ -363,6 +464,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* _pBuffer, int _iLength)
                     node = *jvs_io++;
                     ERROR_LOG_FMT(AMBASEBOARDDEBUG, "JVS SET ADDRESS, node={%d}", node);
                     msg.addData(node == 1);
+                    d10_1 &= ~1;
                     break;
                   default:
                     break;

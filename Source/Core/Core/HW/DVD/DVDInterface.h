@@ -61,6 +61,7 @@ enum class DICommand : u8
   DebugUnlock = 0xff,
   Unknown55 = 0x55,
   UnknownEE = 0xee,
+  UnknownGCAM = 0xaa, //preland note: figure out a name for this!
 };
 
 // Disc drive state.

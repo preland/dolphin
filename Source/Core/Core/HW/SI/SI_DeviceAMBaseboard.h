@@ -9,7 +9,9 @@ class CSIDevice_AMBaseboard : public SerialInterface::ISIDevice {
     {
       CMD_RESET = 0x00,
       CMD_GCAM = 0x70,
-    }; //todo: move this into parent class enum
+    }; //todo: move this into parent class enum?
+    unsigned short coin[2];
+    int coin_pressed[2];
   public:
     //constructor
     CSIDevice_AMBaseboard(Core::System& system, SerialInterface::SIDevices device_type, int device_number);
